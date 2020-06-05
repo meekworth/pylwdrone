@@ -44,7 +44,7 @@ $ pylwdrone rec play 0 --out-file - | ffplay -i -
 ```
 
 #### Take a picture
-````
+```
 >>> with open('picture.jpg', 'wb') as fp:
 >>>     fp.write(drone.take_picture())
 ```
