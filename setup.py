@@ -7,7 +7,7 @@ setuptools.setup(
     name='pylwdrone',
     version='0.1.0',
     author='meekworth',
-    author_email='@meekworth',
+    author_email='meekworth@gmail.com',
     description='communicate with a lewei camera module',
     long_description=long_description,
     long_description_content_type='text/markdown',
