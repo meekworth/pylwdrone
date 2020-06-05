@@ -1,3 +1,5 @@
+__version__ = '0.2.0'
+
 from pylwdrone.lwdrone import LWDrone
 from pylwdrone.responses import (
     CameraFlip,
@@ -15,6 +17,7 @@ from pylwdrone.responses import (
 )
 
 __all__ = [
+    '__version__',
     'CameraFlip',
     'Config',
     'ConfigWiFiSec',

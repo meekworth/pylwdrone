@@ -1,11 +1,13 @@
 import setuptools
 
+import pylwdrone
+
 with open('README.md') as fp:
     long_description = fp.read()
 
 setuptools.setup(
     name='pylwdrone',
-    version='0.1.0',
+    version=pylwdrone.__version__,
     author='meekworth',
     author_email='meekworth@gmail.com',
     description='communicate with a lewei camera module',

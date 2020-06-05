@@ -42,10 +42,10 @@ class LWDrone(object):
     _STREAM_HB_PERIOD = 1
 
     def __init__(self, ip=CAM_IP,
-                 ctrl_port=CTRL_PORT, stream_port=STREAM_PORT):
+                 cmd_port=CMD_PORT, stream_port=STREAM_PORT):
         """Set the drone camera's IP and ports."""
         ip = str(ipaddress.ip_address(ip))
-        self._ctrl_addr = (ip, ctrl_port)
+        self._cmd_addr = (ip, cmd_port)
         self._stream_addr = (ip, stream_port)
         self._lasttime = 0
         self._streaming = False
@@ -56,26 +56,26 @@ class LWDrone(object):
         """Delete a remote file"""
         body = struct.pack('100s', path.encode())
         cmd = Command(CommandType.delfile, body)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def get_baudrate(self):
         """Returns current baudrate for the drone's flight control"""
         cmd = Command(CommandType.getbaudrate)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1)
 
     def get_camera_flip(self):
         """Returns the CameraFlip element representing the camera's
         orientation"""
         cmd = Command(CommandType.getcamflip)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return CameraFlip(rcmd.get_arg(Command.HDR_ARG_ARG1))
 
     def get_config(self):
         """Returns a Config instance of the camera's configuration"""
         cmd = Command(CommandType.getconfig)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return Config.from_bytes(rcmd.body)
 
     def get_file(self, path, outfp):
@@ -112,20 +112,20 @@ class LWDrone(object):
         """Send a heartbeat and return a Heartbeat reponse instance containing
         some state information."""
         cmd = Command(CommandType.heartbeat)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return Heartbeat.from_bytes(rcmd.body)
 
     def get_record_plan(self):
         """Returns a RecordPlan instance with the current recording plan"""
         cmd = Command(CommandType.getrecplan)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return RecordPlan.from_bytes(rcmd.body)
 
     def get_record_rotate_duration(self):
         """Returns the recording rotation time (maximum length of each file)
         in seconds"""
         cmd = Command(CommandType.getrectime)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) * 60
 
     def get_recordings(self):
@@ -137,26 +137,26 @@ class LWDrone(object):
         # pack values: channel number, type, max return, max date, zeros
         body = struct.pack('<LLLLL', 1, 1, 255, t, 0)
         cmd = Command(CommandType.getreclist, body)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return list(RecordListItem.iter_from_bytes(rcmd.body))
 
     def get_resolution(self):
         """Returns the camera's set resolution: '720p' or '1080p'"""
         cmd = Command(CommandType.get1080p)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return '1080p' if rcmd.get_arg(Command.HDR_ARG_ARG1) == 1 else '720p'
 
     def get_time(self):
         """Return a datetime of the camera's current time"""
         cmd = Command(CommandType.gettime)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         tm, = struct.unpack('<Q', rcmd.body)
         return datetime.datetime.fromtimestamp(tm)
 
     def list_pictures(self):
         """Returns a list of pictures from /mnt/Photo (max 256)."""
         cmd = Command(CommandType.getpiclist)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         if rcmd.get_arg(Command.HDR_ARG_ARG1) != 0:
             return None
         return list(PictureListItem.iter_from_bytes(rcmd.body))
@@ -169,7 +169,7 @@ class LWDrone(object):
             raise ValueError('invalid number for max pictures to list')
         cmd = Command(CommandType.getpiclist2)
         cmd.set_arg(Command.HDR_ARG_ARG1, n)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         if rcmd.get_arg(Command.HDR_ARG_ARG1) != 0:
             return None
         return list(PictureListItem.iter_from_bytes(rcmd.body))
@@ -177,28 +177,28 @@ class LWDrone(object):
     def reformat_sd(self):
         """Reformats the SD card, wiping all the data"""
         cmd = Command(CommandType.reformatsd)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def restart_wifi(self):
         """Restart the camera's wifi. The wifi should shutdown 5 seconds after
         the response, and start 1 second later."""
         cmd = Command(CommandType.restartwifi)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_baudrate(self, rate):
         """Set baudrate for drone's flight control"""
         cmd = Command(CommandType.setbaudrate)
         cmd.set_arg(Command.HDR_ARG_ARG1, rate)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_camera_flip(self, flip):
         """Sets the camera orientation from the given CameraFlip element"""
         cmd = Command(CommandType.setcamflip)
         cmd.set_arg(Command.HDR_ARG_ARG1, flip.value)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_config(self, wifi_chan=None, wifi_name=None, wifi_pass=None,
@@ -221,7 +221,7 @@ class LWDrone(object):
         if camflip != None:
             config.camera_flip = camflip
         cmd = Command(CommandType.setconfig, config.to_bytes())
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_record_plan(self, recplan=None):
@@ -229,7 +229,7 @@ class LWDrone(object):
         if not recplan:
             recplan = RecordPlan()
         cmd = Command(CommandType.setrecplan, recplan.to_bytes())
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_recording_rotate_duration(self, t):
@@ -239,14 +239,14 @@ class LWDrone(object):
             raise ValueError('seconds is out of range')
         cmd = Command(CommandType.setrectime)
         cmd.set_arg(Command.HDR_ARG_ARG1, t // 60)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_resolution(self, res1080p):
         """True to set resolution to 1080p, false for 720p"""
         cmd = Command(CommandType.set1080p)
         cmd.set_arg(Command.HDR_ARG_ARG1, int(res1080p))
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_time(self, dt=None):
@@ -255,7 +255,7 @@ class LWDrone(object):
             dt = datetime.datetime.now()
         body = struct.pack('<Q', int(dt.timestamp()))
         cmd = Command(CommandType.settime, body)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_wifi_channel(self, chan):
@@ -264,13 +264,13 @@ class LWDrone(object):
             raise ValueError('invalid wifi channel')
         cmd = Command(CommandType.setwifichan)
         cmd.set_arg(Command.HDR_ARG_ARG1, chan)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_wifi_defaults(self):
         """Set wifi defaults (no custom name, open access)"""
         cmd = Command(CommandType.setwifidefs)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_wifi_name(self, name):
@@ -279,7 +279,7 @@ class LWDrone(object):
         if len(body) > Config.MAX_WIFI_NAME_LEN:
             raise ValueError('wifi name too long')
         cmd = Command(CommandType.setwifiname, body)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def set_wifi_password(self, password):
@@ -290,7 +290,7 @@ class LWDrone(object):
         # first character is skipped, so prepend dummy byte
         body = struct.pack('s64s', b'_', p)
         cmd = Command(CommandType.setwifipass, body)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return rcmd.get_arg(Command.HDR_ARG_ARG1) == 0
 
     def start_recording_replay(self, index):
@@ -330,7 +330,7 @@ class LWDrone(object):
         """Take a picture, saving it to the SD card and returning the JPEG
         bytes."""
         cmd = Command(CommandType.takepic)
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return Picture.from_bytes(rcmd.body)
 
     def take_picture2(self, save):
@@ -338,7 +338,7 @@ class LWDrone(object):
         it to the SD card."""
         cmd = Command(CommandType.takepic2)
         cmd.set_arg(Command.HDR_ARG_ARG1, int(save))
-        rcmd = self._send_ctrl_cmd(cmd)
+        rcmd = self._send_cmd(cmd)
         return Picture.from_bytes(rcmd.body)
 
     def _compare_and_set_streaming(self, c, s):
@@ -348,9 +348,9 @@ class LWDrone(object):
                 return True
         return False
 
-    def _send_ctrl_cmd(self, cmd):
+    def _send_cmd(self, cmd):
         t = LWDrone._CONNECT_TIMEOUT
-        with socket.create_connection(self._ctrl_addr, timeout=t) as sock:
+        with socket.create_connection(self._cmd_addr, timeout=t) as sock:
             cmd_bytes = cmd.to_bytes()
             sock.sendall(cmd_bytes)
             hdr_bytes = _recvall(sock, Command.HDR_LEN)

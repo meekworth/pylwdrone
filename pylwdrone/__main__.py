@@ -7,6 +7,7 @@ import os
 import os.path
 import sys
 
+from pylwdrone import __version__
 from pylwdrone import utils
 from pylwdrone.command import CameraFlip
 from pylwdrone.defaults import *
@@ -504,7 +505,7 @@ def _subparser_wifi(subparsers):
     return
 
 def _get_drone(args):
-    return LWDrone(args.ip, args.control_port, args.stream_port)
+    return LWDrone(args.ip, args.command_port, args.stream_port)
 
 def _create_argparser():
     parser = argparse.ArgumentParser(
@@ -516,11 +517,11 @@ def _create_argparser():
         type=ipaddress.ip_address,
         help='IP address of drone')
     parser.add_argument(
-        '--control-port',
-        default=CTRL_PORT,
+        '--command-port',
+        default=CMD_PORT,
         metavar='PORT',
         type=int,
-        help='drone control port')
+        help='drone command port')
     parser.add_argument(
         '--stream-port',
         default=STREAM_PORT,
@@ -528,10 +529,14 @@ def _create_argparser():
         type=int,
         help='drone stream port')
     parser.add_argument(
-        '-q',
-        '--quiet',
+        '-q', '--quiet',
         action='store_true',
         help='don\'t print success/failure messages')
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version=__version__,
+        help='print the version and exit')
 
     subparsers = parser.add_subparsers(title='drone cam cmds', metavar='')
     _subparser_baudrate(subparsers)
