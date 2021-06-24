@@ -1,7 +1,7 @@
+import binascii
 import calendar
 import datetime
 import enum
-import math
 import struct
 
 from pylwdrone import utils
@@ -225,9 +225,9 @@ class Heartbeat(object):
     _LEN = 64
 
     @property
-    def client_size(self):
-        """Client size (?)"""
-        return self._client_size
+    def client_count(self):
+        """Number of clients connected for streaming"""
+        return self._client_cnt
 
     @property
     def sdcard_free(self):
@@ -255,12 +255,12 @@ class Heartbeat(object):
         if len(data) != Heartbeat._LEN:
             raise ValueError('invalid data length for heartbeat')
         fields = struct.unpack('<IQQIQ32s', data)
-        mounted, sdc_size, sdc_free, client_size, curr_time, _ = fields
+        mounted, sdc_size, sdc_free, client_cnt, curr_time, _ = fields
         hb = Heartbeat()
         hb._sdc_mounted = mounted == 1
         hb._sdc_size = sdc_size
         hb._sdc_free = sdc_free
-        hb._client_size = client_size
+        hb._client_cnt = client_cnt
         # cam returns epoch in GMT+8, so need TZ=-8 to get back to UTC
         tz = datetime.timezone(datetime.timedelta(hours=-8))
         dt = datetime.datetime.fromtimestamp(curr_time, tz)
@@ -520,6 +520,106 @@ class RecordPlan(object):
         return RecordPlan(bool(active), dayflags, stime, etime, maxdur)
 
 
+class StreamUnmunger(object):
+    """Class to encapsulate parameters from the initial header for unmunging
+    the video stream"""
+    _TYPE_NONE = 0
+    _TYPE_ONE = 1
+    _TYPE_NEW = 129
+
+    def __init__(self, stream_type, key1, key2):
+        self._type = stream_type
+        self._a = key1 & 0xffff
+        self._b = (key1 >> 16) & 0xffff
+        self._c = key2 & 0xffff
+        return
+
+    def unmunge(self, data, size, count):
+        if self._type == StreamUnmunger._TYPE_NEW:
+            self._fix_midstream(data, size>>1, self._a, self._b, self._c)
+        elif self._type == StreamUnmunger._TYPE_ONE:
+            idx = self._fix_byte(count, size)
+            if 0 <= idx < size:
+                data[idx] = ~data[idx] & 0xff
+        return
+
+    def _fix_byte(self, p1, p2):
+        p2 &= 0xffffffff
+        if (p2 & 1) == 0:
+            v2 = (p2 + 1 + (p2 ^ p1)) ^ p2
+        else:
+            v2 = ((p2 ^ p1) + p2) ^ p2
+        v1 = int(v2 / p2) if p2 != 0 else 0
+        return (v2 - v1*p2) & 0xffffffff
+
+    def _fix_midstream(self, data, idx, p1, p2, p3):
+        for i, b in enumerate(StreamUnmunger._MDATA1):
+            if b == p1:
+                data[idx] = i
+                break
+        for i, b in enumerate(StreamUnmunger._MDATA2):
+            if b == p2:
+                data[idx+1] = data[idx] ^ i
+                break
+        for i, b in enumerate(StreamUnmunger._MDATA3):
+            if b == p3:
+                data[idx+2] = data[idx] ^ data[idx+1] ^ i
+                break
+        return
+
+    _MDATA1 = struct.unpack('<256H', binascii.unhexlify(
+        '0000010008617b17515362711b7cab4a7a683b866d027801e706867bff55e50a'
+        '432727456d08fe477e3c7a6cd93fc72e874aae403575277c9f0c8473690d8113'
+        '5020e8202a631f7a7a7a201f04001c537540ef03c62267218b81a3449e554715'
+        'b61c5a1eba2c8d4b681d4f77cf47861bf11516688e450730af6ac7009d17a643'
+        '501eb417ab49ae47030dea7eb035994cc85751690951667f4271b426dd2e1624'
+        '4a0b530f9e847d3e0d02ba879d1be8319d7246405d485e29825320070d61e068'
+        'c524d0708d6d872013849f27af19b73e228112257407c5314a70266d7e57412d'
+        '5564d84dec5db534bb3cc688a04bbf0aea19840284444106c37cb831127c6e7d'
+        '466571801c140a307a7917083b471a89b76893658a5d9944574fdf541c37b181'
+        '4966947e130bdd44de3cf607421f0821663a2737a325691f5e15006bca207723'
+        'c837f705f96327782141c56ee621db3efa5af9395340da3e46788f163c140d89'
+        '0339d151907b6c2fef090f39646b4e89d5303d53f76b551abd12306a3b292276'
+        'ed6c7358f58048624038e87e1f07c90c472e490c011a0e49ba0d9c6aef1afc7b'
+        '6b6014847c156541930cf919fb3bdc4f872d4361af5ec9258544811dab25525b'
+        'de1a060c855527601f5464843e32d86ab849371cc05d0b6ba4525c2aee246e5a'
+        'cb67aa1f465d5f21ef571e23122fe856fd5a0c0b7a23280ba85f3786de358e2e'))
+    _MDATA2 = struct.unpack('<256H', binascii.unhexlify(
+        '0000010064780174e6064a4be22abb0b13008b398b752b47d8564f4bb2529659'
+        '7c58210e341f2656333e0167135ef0342305826154203d04f864d6542187d87a'
+        '12835d15443fcb0e753911723f0fdf772838ba65cf011026544483838f3b5a88'
+        '9b7f992bd2435e01b1609026ea3d2a687255cd17e86a2f3eb316f817bc17822f'
+        '6901a73d6a6dbc012b4c7e771134683b4883ff6abf701f6596882c08ad4a1f7c'
+        '61228070844db32f41509740875aa14d4a73ca260f897249c82088352930bd59'
+        'd400ed33f480e51ff083d72c0a527a3587380745f76ba776643ffa5b17194868'
+        '713bb25cfd38600aa611ed06547c8f63ee34b33c4f0be72dda479e62b56e796e'
+        '00203058cd69fb59c046bc35348114350483a818a44eaa22000c611a4a0ab42f'
+        '202b6550f625255f0f650f6df06b4f050d7d753ad84eeb799e2c2a267655dc5d'
+        '515214624c4b94206717d604346416070121e519d0464380590dbf7ce44e6852'
+        'c6006b6c82512c595b7c4f883e35631fc72b268044506c01340dab5330145d43'
+        '9961040dd04bc088a61e860364400e37034292693345df61154e1e32002c1a18'
+        '8040be2e23585f35bf47cc592c2089858750041c5a0cbe8796433c87893fd16f'
+        'c58319456b25de83ef724334f656e16d1d64d3523512d622c906233772352265'
+        'a55d672fd8034527b3883c20416a2e6c18871585cb25714f4e40c960d97c5b65'))
+    _MDATA3 = struct.unpack('<256H', binascii.unhexlify(
+        '00000100f648f37a4f6e148697430d00e94cf66cb585270b8b737916e47b0e49'
+        'fa477536bc37117f194a9256955bf7564881ad8514169c1bad3bed14bc4ade10'
+        'd2029f0e6702d05d9e54bd3b9b05955dbc27973611369f3aac464484b5015c7b'
+        'f206a9002528b664704a874310257d28cc258f610980c5111471b056882f282a'
+        'bb28204a3d0cce6ca043015bfd58bb12ef82785eb4692d35fb6f8c07bc2c484d'
+        '4011770c45099f16b97f4456c8802f390c6124867f584711c588307e3520aa6d'
+        'ab7cd925cf6241474d77ce714b19cc8764411c7da32f3e1b5d00f66a7c506821'
+        '186f274ed468133d1e60a7119c86c6142f83c85cf52b8b141b69fd426125f906'
+        'c144ee34ba009a758d22a90267178f3b06550f1eb581c76d3c01df63334f6173'
+        '4c548e1cd672f2196559c845187ab784c46a5a6c195b0c4fd759694296839e0c'
+        '2833131fd805b26a696b5f54ec2d2504741f9d61538763736e0d5e22b54e9558'
+        'dd1db44e2e403a843510e686260ced131967fb546d516e2517100e5483845b49'
+        'f10ab0578d61b00b9e58f45bf96e865923594039fe5f9a86cf3e9d6d0f4d6c5e'
+        '2e8356578309dd378c0dd2586a329c521f33d751ac511b1c822624506c0d4d1c'
+        'aa246929472fcd6ebe64790d6e2da4343a778d0449070885be179a7f3b1fc237'
+        '0e51eb0501447b5f24011878697cc0037e3ae95cae0b43288e008f4fa9557848'))
+
+
 class VideoFrame(object):
     """Class to represent an H264 frame returned from the camera while
     streaming."""
@@ -537,11 +637,11 @@ class VideoFrame(object):
         return self._size
 
     @staticmethod
-    def from_bytes(data):
+    def from_bytes(su, data):
         """Creates a VideoFrame instance from the given bytes"""
         flag, size, count, gphoto = struct.unpack_from('<LLQL', data)
         frame = VideoFrame._get_frame_bytes(
-            data[VideoFrame._FRAME_OFF:], size, count)
+            su, data[VideoFrame._FRAME_OFF:], size, count)
         vframe = VideoFrame()
         vframe._flag = flag
         vframe._size = size
@@ -551,22 +651,11 @@ class VideoFrame(object):
         return vframe
 
     @staticmethod
-    def _get_frame_bytes(data, size, count):
-        def fix_byte(p1, p2):
-            p2 &= 0xffffffff
-            if (p2 & 1) == 0:
-                v2 = (p2 + 1 + (p2 ^ p1)) ^ p2
-            else:
-                v2 = ((p2 ^ p1) + p2) ^ p2
-            v1 = int(v2 / p2) if p2 != 0 else 0
-            return (v2 - v1*p2) & 0xffffffff
-
-        frame_bytes = bytearray(data)
-        if len(frame_bytes) != size:
+    def _get_frame_bytes(su, data, size, count):
+        if len(data) != size:
             raise ValueError('incomplete video frame')
-        idx = fix_byte(count, size)
-        if 0 <= idx < size:
-            frame_bytes[idx] = ~frame_bytes[idx] & 0xff
+        frame_bytes = bytearray(data)
+        su.unmunge(frame_bytes, size, count)
         return frame_bytes
 
 
@@ -581,11 +670,18 @@ class ReplayFrame(VideoFrame):
         return self._frame_num
 
     @staticmethod
-    def from_bytes(data):
+    def from_bytes(su, data):
         """Creates a ReplayFrame instance from the given bytes"""
-        rframe = VideoFrame.from_bytes(data)
-        frame_num, count2 = struct.unpack_from('<LL', rframe._frame_bytes)
+        rframe = ReplayFrame()
+        # just copy over the fields from the temp superclass instance
+        vframe = VideoFrame.from_bytes(su, data)
+        rframe._flag = vframe._flag
+        rframe._size = vframe._size
+        rframe._count = vframe._count
+        rframe._gphoto = vframe._gphoto
+        rframe._frame_bytes = vframe._frame_bytes[8:]
+
+        frame_num, count2 = struct.unpack_from('<LL', vframe._frame_bytes)
         rframe._frame_num = frame_num
         rframe._count2 = count2
-        rframe._frame_bytes = rframe._frame_bytes[8:]
         return rframe

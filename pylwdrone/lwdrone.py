@@ -24,6 +24,7 @@ from pylwdrone.responses import (
     RecordListItem,
     RecordPlan,
     ReplayFrame,
+    StreamUnmunger,
     VideoFrame,
 )
 
@@ -367,10 +368,14 @@ class LWDrone(object):
             sock.sendall(cmd_bytes)
             try:
                 while self._streaming:
-                    frame_packet = self._get_frame(sock)
+                    hdr, frame_packet = self._get_frame(sock)
                     if not frame_packet: # check for end of stream
                         break
-                    yield frame_cls.from_bytes(frame_packet)
+                    stream_type = hdr.get_arg(Command.HDR_ARG_STREAM_TYPE)
+                    dec1 = hdr.get_arg(Command.HDR_ARG_STREAM_DEC1)
+                    dec2 = hdr.get_arg(Command.HDR_ARG_STREAM_DEC2)
+                    su = StreamUnmunger(stream_type, dec1, dec2)
+                    yield frame_cls.from_bytes(su, frame_packet)
                     ts = datetime.datetime.now().timestamp()
                     if ts - self._lasttime > LWDrone._STREAM_HB_PERIOD:
                         sock.sendall(hb_bytes)
@@ -390,8 +395,8 @@ class LWDrone(object):
             # ignore heartbeat responses and just get next frame
             return self._get_frame(sock)
         if hdr.cmdtype == CommandType.retreplayend:
-            return None
-        return body_bytes
+            return None, None
+        return hdr, body_bytes
 
 
 def _recvall(s, n):

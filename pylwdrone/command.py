@@ -66,7 +66,9 @@ class Command(object):
     _HDR_IDX_CMD = 0
     HDR_ARG_ARG1 = 0
     HDR_ARG_BODYSZ = 2
-    HDR_ARG_STREAM = 3
+    HDR_ARG_STREAM_TYPE = 3
+    HDR_ARG_STREAM_DEC1 = 4
+    HDR_ARG_STREAM_DEC2 = 5
 
     def __init__(self, cmdtype, body=b''):
         """Initialize a Command with the given type and optional body."""

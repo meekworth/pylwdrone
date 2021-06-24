@@ -194,7 +194,7 @@ def _cmd_heartbeat(drone, args):
     print('SD card ready:', hb.sdcard_ismounted)
     print('SD card size: ', hb.sdcard_size // 1024**2, 'MiB')
     print('SD card free: ', hb.sdcard_free // 1024**2, 'MiB')
-    print('Client size:  ', hb.client_size)
+    print('Client count: ', hb.client_count)
     print('Current time: ', hb.time.ctime(), 'UTC')
     return True
 
