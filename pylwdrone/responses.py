@@ -136,7 +136,13 @@ class Config(object):
         conf._wifi_sec = ConfigWiFiSec(wifi_sec)
         conf._wifi_name = utils.cstr2str(wifi_name)
         conf._wifi_pass = utils.cstr2str(wifi_pass)
-        conf._time = datetime.datetime.fromtimestamp(time)
+        try:
+            conf._time = datetime.datetime.fromtimestamp(time)
+        except OverflowError:
+            # For V300, unsure what the 64-bit value is, but it can be
+            # negative. For now, just ignore the invalid timestamp and set
+            # to 0.
+            conf._time = datetime.datetime.fromtimestamp(0)
         conf._sdc_mounted = sdc_mounted == 1
         conf._sdc_size = sdc_size
         conf._sdc_free = sdc_free
@@ -520,7 +526,46 @@ class RecordPlan(object):
         return RecordPlan(bool(active), dayflags, stime, etime, maxdur)
 
 
-class StreamUnmunger(object):
+class VideoFrame(object):
+    """Class to represent an H264 frame returned from the camera while
+    streaming."""
+    _FRAME_OFF = 32
+    STOP_CMDTYPE = CommandType.stopstream
+
+    @property
+    def frame_bytes(self):
+        """raw bytes of the frame"""
+        return self._frame_bytes
+
+    @property
+    def size(self):
+        """size in bytes of frames"""
+        return self._size
+
+    @staticmethod
+    def from_bytes(su, data):
+        """Creates a VideoFrame instance from the given bytes"""
+        flag, size, count, gphoto = struct.unpack_from('<LLQL', data)
+        frame = VideoFrame._get_frame_bytes(
+            su, data[VideoFrame._FRAME_OFF:], size, count)
+        vframe = VideoFrame()
+        vframe._flag = flag
+        vframe._size = size
+        vframe._count = count
+        vframe._gphoto = gphoto
+        vframe._frame_bytes = frame
+        return vframe
+
+    @staticmethod
+    def _get_frame_bytes(su, data, size, count):
+        if len(data) != size:
+            raise ValueError('incomplete video frame')
+        frame_bytes = bytearray(data)
+        su.unmunge(frame_bytes, size, count)
+        return frame_bytes
+
+
+class VideoFrameUnmunger(object):
     """Class to encapsulate parameters from the initial header for unmunging
     the video stream"""
     _TYPE_NONE = 0
@@ -535,9 +580,9 @@ class StreamUnmunger(object):
         return
 
     def unmunge(self, data, size, count):
-        if self._type == StreamUnmunger._TYPE_NEW:
+        if self._type == VideoFrameUnmunger._TYPE_NEW:
             self._fix_midstream(data, size>>1, self._a, self._b, self._c)
-        elif self._type == StreamUnmunger._TYPE_ONE:
+        elif self._type == VideoFrameUnmunger._TYPE_ONE:
             idx = self._fix_byte(count, size)
             if 0 <= idx < size:
                 data[idx] = ~data[idx] & 0xff
@@ -553,15 +598,15 @@ class StreamUnmunger(object):
         return (v2 - v1*p2) & 0xffffffff
 
     def _fix_midstream(self, data, idx, p1, p2, p3):
-        for i, b in enumerate(StreamUnmunger._MDATA1):
+        for i, b in enumerate(VideoFrameUnmunger._MDATA1):
             if b == p1:
                 data[idx] = i
                 break
-        for i, b in enumerate(StreamUnmunger._MDATA2):
+        for i, b in enumerate(VideoFrameUnmunger._MDATA2):
             if b == p2:
                 data[idx+1] = data[idx] ^ i
                 break
-        for i, b in enumerate(StreamUnmunger._MDATA3):
+        for i, b in enumerate(VideoFrameUnmunger._MDATA3):
             if b == p3:
                 data[idx+2] = data[idx] ^ data[idx+1] ^ i
                 break
@@ -618,45 +663,6 @@ class StreamUnmunger(object):
         '2e8356578309dd378c0dd2586a329c521f33d751ac511b1c822624506c0d4d1c'
         'aa246929472fcd6ebe64790d6e2da4343a778d0449070885be179a7f3b1fc237'
         '0e51eb0501447b5f24011878697cc0037e3ae95cae0b43288e008f4fa9557848'))
-
-
-class VideoFrame(object):
-    """Class to represent an H264 frame returned from the camera while
-    streaming."""
-    _FRAME_OFF = 32
-    STOP_CMDTYPE = CommandType.stopstream
-
-    @property
-    def frame_bytes(self):
-        """raw bytes of the frame"""
-        return self._frame_bytes
-
-    @property
-    def size(self):
-        """size in bytes of frames"""
-        return self._size
-
-    @staticmethod
-    def from_bytes(su, data):
-        """Creates a VideoFrame instance from the given bytes"""
-        flag, size, count, gphoto = struct.unpack_from('<LLQL', data)
-        frame = VideoFrame._get_frame_bytes(
-            su, data[VideoFrame._FRAME_OFF:], size, count)
-        vframe = VideoFrame()
-        vframe._flag = flag
-        vframe._size = size
-        vframe._count = count
-        vframe._gphoto = gphoto
-        vframe._frame_bytes = frame
-        return vframe
-
-    @staticmethod
-    def _get_frame_bytes(su, data, size, count):
-        if len(data) != size:
-            raise ValueError('incomplete video frame')
-        frame_bytes = bytearray(data)
-        su.unmunge(frame_bytes, size, count)
-        return frame_bytes
 
 
 class ReplayFrame(VideoFrame):

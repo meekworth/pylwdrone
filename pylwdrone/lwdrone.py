@@ -5,7 +5,6 @@ import ipaddress
 import socket
 import struct
 import threading
-import time
 
 from pylwdrone.command import (
     CameraFlip,
@@ -24,8 +23,8 @@ from pylwdrone.responses import (
     RecordListItem,
     RecordPlan,
     ReplayFrame,
-    StreamUnmunger,
     VideoFrame,
+    VideoFrameUnmunger,
 )
 
 class LWDrone(object):
@@ -374,8 +373,8 @@ class LWDrone(object):
                     stream_type = hdr.get_arg(Command.HDR_ARG_STREAM_TYPE)
                     dec1 = hdr.get_arg(Command.HDR_ARG_STREAM_DEC1)
                     dec2 = hdr.get_arg(Command.HDR_ARG_STREAM_DEC2)
-                    su = StreamUnmunger(stream_type, dec1, dec2)
-                    yield frame_cls.from_bytes(su, frame_packet)
+                    fu = VideoFrameUnmunger(stream_type, dec1, dec2)
+                    yield frame_cls.from_bytes(fu, frame_packet)
                     ts = datetime.datetime.now().timestamp()
                     if ts - self._lasttime > LWDrone._STREAM_HB_PERIOD:
                         sock.sendall(hb_bytes)

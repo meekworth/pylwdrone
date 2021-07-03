@@ -15,7 +15,7 @@ class CommandType(enum.IntEnum):
     """Commands supported by the camera's lewei_cam server."""
     heartbeat = 1
     startstream = 2 # stream
-    stopstream = 3 #stream
+    stopstream = 3 # stream
     settime = 4
     gettime = 5
     getrecplan = 6
@@ -23,7 +23,7 @@ class CommandType(enum.IntEnum):
     startreplay = 9 # stream
     stopreplay = 16 # stream
     setrecplan = 17
-    getfile = 18 #stream
+    getfile = 18 # stream
     takepic = 19
     delfile = 20
     reformatsd = 21
