@@ -11,6 +11,11 @@ does not control the drone's flight yet.
 $ pylwdrone stream start --out-file - | ffplay -i -
 ```
 
+#### Stream live video, without buffer or "lag"
+```
+$ pylwdrone stream start --out-file - | ffplay -i -fflags nobuffer -flags low_delay -probesize 32 -sync ext -
+```
+
 #### Record live video then replay later
 ```
 $ pylwdrone rec start
