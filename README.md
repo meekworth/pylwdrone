@@ -45,11 +45,17 @@ $ pylwdrone rec play 0 --out-file - | ffplay -i -
 #### Get a file
 ```
 >>> with open('video.mp4', 'wb') as fp:
->>>     drone.get_file('/mnt/Video/20200604-041040.mp', fp)
+>>>     drone.get_file('/mnt/Video/20200604-041040.mp4', fp)
 ```
 
 #### Take a picture
 ```
 >>> with open('picture.jpg', 'wb') as fp:
->>>     fp.write(drone.take_picture())
+>>>     fp.write(drone.take_picture().data)
+```
+
+#### Start and stop recording
+```
+>>> drone.set_record_plan()
+>>> drone.set_record_plan(RecordPlan(active=False))
 ```
